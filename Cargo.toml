@@ -3,11 +3,14 @@ name = "winpls"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+path = "src/lib.rs"
+crate-type = ["lib"]
+
 [dependencies]
 pollster = "0.4.0"
 wgpu = "29.0.0"
 winit = "0.30.13"
-
 
 [lints.rust]
 missing_docs = "warn"
