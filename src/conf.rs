@@ -1,4 +1,3 @@
-
 /// App configuration
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -18,7 +17,7 @@ pub struct Config {
     pub fullscreen: bool,
 
     /// Whether the user can resize the window
-    pub resizable: bool
+    pub resizable: bool,
 }
 
 impl Default for Config {
@@ -29,7 +28,7 @@ impl Default for Config {
             backend: wgpu::Backends::all(),
             title: "Window".to_owned(),
             resizable: true,
-            fullscreen: false
+            fullscreen: false,
         }
     }
 }

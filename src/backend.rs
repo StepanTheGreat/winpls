@@ -33,7 +33,8 @@ impl GraphicsBackend {
             power_preference: wgpu::PowerPreference::None,
             force_fallback_adapter: false,
             compatible_surface: Some(&surface),
-        })).unwrap();
+        }))
+        .unwrap();
 
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: None,
@@ -42,15 +43,18 @@ impl GraphicsBackend {
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::Performance,
             trace: wgpu::Trace::Off,
-        })).unwrap();
+        }))
+        .unwrap();
 
         let capabilities = surface.get_capabilities(&adapter);
 
         // TODO: Better format selection
-        let swapchain_format = capabilities.formats.iter()
+        let swapchain_format = capabilities
+            .formats
+            .iter()
             .copied()
             .find(|format| format.to_storage_format().is_some())
-            .unwrap_or( capabilities.formats[0]);
+            .unwrap_or(capabilities.formats[0]);
 
         let alpha_mode = capabilities.alpha_modes[0];
 
@@ -60,9 +64,9 @@ impl GraphicsBackend {
             width: window_size.width,
             height: window_size.height,
             present_mode: wgpu::PresentMode::AutoVsync,
-            alpha_mode: alpha_mode,
+            alpha_mode,
             view_formats: vec![swapchain_format],
-            desired_maximum_frame_latency: 2
+            desired_maximum_frame_latency: 2,
         };
 
         surface.configure(&device, &config);
@@ -96,12 +100,13 @@ impl GraphicsBackend {
 
     /// Create a texture with provided data
     pub fn create_texture_init(
-        &self, 
-        desc: &wgpu::TextureDescriptor, 
+        &self,
+        desc: &wgpu::TextureDescriptor,
         order: wgpu::wgt::TextureDataOrder,
-        data: &[u8] 
+        data: &[u8],
     ) -> wgpu::Texture {
-        self.device.create_texture_with_data(&self.queue, desc, order, data)
+        self.device
+            .create_texture_with_data(&self.queue, desc, order, data)
     }
 
     /// Create a buffer
@@ -191,21 +196,20 @@ impl GraphicsBackend {
         let texture = self.texture.lock().unwrap();
 
         texture.as_ref().map(|texture| {
-            texture.texture
-                .create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(format),
-                    ..Default::default()
-                })
+            texture.texture.create_view(&wgpu::TextureViewDescriptor {
+                format: Some(format),
+                ..Default::default()
+            })
         })
     }
 
     /// Get the surface format. Useful for initilization, even when no frames are available
-    /// 
+    ///
     /// # Panics
     /// For the same reason [GraphicsBackend::get_surface_view] will
     pub fn get_surface_format(&self) -> wgpu::TextureFormat {
         let config = self.config.lock().unwrap();
-        
+
         config.format
     }
 
@@ -245,7 +249,7 @@ impl GraphicsBackend {
     }
 
     /// Clear the screen with provided color values
-    /// 
+    ///
     /// Under the hood this will allocate a new command buffer and create an empty render pass.
     /// If you're overwriting the surface with something else anyway - you could avoid this operation entirely.
     pub fn clear_screen(&self, r: f32, g: f32, b: f32, a: f32) {

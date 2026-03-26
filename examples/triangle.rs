@@ -41,15 +41,12 @@ const INDICES: &[u32] = &[0, 1, 2];
 #[repr(C)]
 struct Vertex {
     position: [f32; 2],
-    color: [f32; 4]
+    color: [f32; 4],
 }
 
 impl Vertex {
     const fn new(position: [f32; 2], color: [f32; 4]) -> Self {
-        Self {
-            position,
-            color
-        }
+        Self { position, color }
     }
 
     fn vertex_attributes<'a>() -> &'a [wgpu::VertexAttribute] {
@@ -58,14 +55,13 @@ impl Vertex {
             wgpu::VertexAttribute {
                 format: wgpu::VertexFormat::Float32x2,
                 offset: 0,
-                shader_location: 0
+                shader_location: 0,
             },
-
             // Color
             wgpu::VertexAttribute {
                 format: wgpu::VertexFormat::Float32x4,
                 offset: size_of::<[f32; 2]>() as u64,
-                shader_location: 1
+                shader_location: 1,
             },
         ]
     }
@@ -95,12 +91,12 @@ impl App {
         let pipeline_layout = backend.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            immediate_size: 0
+            immediate_size: 0,
         });
 
         let shader = backend.create_shader(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(SHADER))
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(SHADER)),
         });
 
         let pipeline = backend.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -110,13 +106,11 @@ impl App {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[
-                    wgpu::VertexBufferLayout {
-                        array_stride: Vertex::vertex_stride(),
-                        step_mode: Vertex::vertex_step_mode(),
-                        attributes: Vertex::vertex_attributes()
-                    }
-                ]
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: Vertex::vertex_stride(),
+                    step_mode: Vertex::vertex_step_mode(),
+                    attributes: Vertex::vertex_attributes(),
+                }],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -125,7 +119,7 @@ impl App {
                 cull_mode: None,
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
-                conservative: false
+                conservative: false,
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
@@ -133,28 +127,26 @@ impl App {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[
-                    Some(wgpu::ColorTargetState {
-                        format: surface_format,
-                        blend: Some(wgpu::BlendState::REPLACE),
-                        write_mask: wgpu::ColorWrites::ALL    
-                    })
-                ]
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
             }),
             multiview_mask: None,
-            cache: None
+            cache: None,
         });
 
         let vertex_buffer = backend.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(VERTICIES),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::UNIFORM
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::UNIFORM,
         });
 
         let index_buffer = backend.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX
+            usage: wgpu::BufferUsages::INDEX,
         });
 
         Self {
@@ -170,10 +162,12 @@ impl AppHandler for App {
     fn draw(&mut self) {
         let view = match self.backend.get_surface_view() {
             Some(view) => view,
-            None => return
+            None => return,
         };
 
-        let mut encoder = self.backend.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut encoder = self
+            .backend
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -183,13 +177,13 @@ impl AppHandler for App {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store
-                    }
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None
+                multiview_mask: None,
             });
 
             rpass.set_pipeline(&self.pipeline);

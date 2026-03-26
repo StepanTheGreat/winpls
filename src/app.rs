@@ -45,7 +45,7 @@ pub fn get_graphics_backend() -> Arc<GraphicsBackend> {
 pub(crate) struct AppCtx {
     config: Config,
 
-    /// Our window 
+    /// Our window
     window: Mutex<Option<Arc<Window>>>,
 
     /// Our graphics context
@@ -71,10 +71,6 @@ impl AppCtx {
         // Initialize our backend if it's not already
         if backend.is_none() && window.is_some() {
             let new_backend = GraphicsBackend::new(window.as_ref().unwrap().clone());
-            
-            // Immediately try to flip
-            new_backend.flip();
-
             *backend = Some(Arc::new(new_backend));
         }
     }
@@ -132,7 +128,11 @@ impl ApplicationHandler for WinitApp {
         with_app_ctx(|ctx| {
             let config = ctx.get_config();
 
-            let fullscreen = if config.fullscreen { Some(Fullscreen::Borderless(None)) } else { None };
+            let fullscreen = if config.fullscreen {
+                Some(Fullscreen::Borderless(None))
+            } else {
+                None
+            };
 
             let window = Window::default_attributes()
                 .with_title(config.title.clone())
