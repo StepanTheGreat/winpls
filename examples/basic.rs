@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use winpls::{AppHandler, GraphicsBackend, get_graphics_backend, start};
+use winpls::{AppHandler, Config, GraphicsBackend, get_graphics_backend, start};
 
 struct App {
     backend: Arc<GraphicsBackend>,
@@ -27,5 +27,11 @@ impl AppHandler for App {
 }
 
 fn main() {
-    start(|| Box::new(App::new()));
+    let conf = Config {
+        resizable: true,
+        title: "Hello".to_owned(),
+        ..Default::default()
+    };
+
+    start(|| Box::new(App::new()), conf);
 }

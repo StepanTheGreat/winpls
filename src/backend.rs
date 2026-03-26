@@ -3,51 +3,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use wgpu::util::{DeviceExt, TextureFormatExt};
 use winit::window::Window;
-
-/// An early initialized graphics device. The importance of this structure is to be able to initialize a device
-/// in advance, before creating a window. This allows us to immediately create a window AND draw onto it, without waiting for the
-/// device to initialize.
-pub struct EarlyGraphicsDevice {
-    instance: wgpu::Instance,
-    adapter: wgpu::Adapter,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-}
-
-impl EarlyGraphicsDevice {
-    pub(crate) async fn new() -> Self {
-        let instance = wgpu::Instance::default();
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::None,
-                force_fallback_adapter: false,
-                compatible_surface: None,
-            })
-            .await
-            .unwrap();
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            })
-            .await
-            .unwrap();
-
-        Self {
-            instance,
-            adapter,
-            device,
-            queue,
-        }
-    }
-}
 
 /// A wgpu graphics backend
 pub struct GraphicsBackend {
@@ -65,19 +22,48 @@ impl Debug for GraphicsBackend {
 }
 
 impl GraphicsBackend {
-    pub(crate) fn new(window: Arc<Window>, early: EarlyGraphicsDevice) -> Self {
+    pub(crate) fn new(window: Arc<Window>) -> Self {
         let window_size = window.inner_size();
 
-        let instance = early.instance;
-        let adapter = early.adapter;
-        let device = early.device;
-        let queue = early.queue;
+        let instance = wgpu::Instance::default();
 
         let surface = instance.create_surface(Arc::new(window)).unwrap();
 
-        let config = surface
-            .get_default_config(&adapter, window_size.width, window_size.height)
-            .unwrap();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::None,
+            force_fallback_adapter: false,
+            compatible_surface: Some(&surface),
+        })).unwrap();
+
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: None,
+            required_features: wgpu::Features::BGRA8UNORM_STORAGE,
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })).unwrap();
+
+        let capabilities = surface.get_capabilities(&adapter);
+
+        // TODO: Better format selection
+        let swapchain_format = capabilities.formats.iter()
+            .copied()
+            .find(|format| format.to_storage_format().is_some())
+            .unwrap_or( capabilities.formats[0]);
+
+        let alpha_mode = capabilities.alpha_modes[0];
+
+        let config = wgpu::SurfaceConfiguration {
+            usage: capabilities.usages,
+            format: swapchain_format,
+            width: window_size.width,
+            height: window_size.height,
+            present_mode: wgpu::PresentMode::AutoVsync,
+            alpha_mode: alpha_mode,
+            view_formats: vec![swapchain_format],
+            desired_maximum_frame_latency: 2
+        };
 
         surface.configure(&device, &config);
 
@@ -108,9 +94,24 @@ impl GraphicsBackend {
         self.device.create_texture(desc)
     }
 
+    /// Create a texture with provided data
+    pub fn create_texture_init(
+        &self, 
+        desc: &wgpu::TextureDescriptor, 
+        order: wgpu::wgt::TextureDataOrder,
+        data: &[u8] 
+    ) -> wgpu::Texture {
+        self.device.create_texture_with_data(&self.queue, desc, order, data)
+    }
+
     /// Create a buffer
     pub fn create_buffer(&self, desc: &wgpu::BufferDescriptor) -> wgpu::Buffer {
         self.device.create_buffer(desc)
+    }
+
+    /// Create a buffer and fill it up with data immediately
+    pub fn create_buffer_init(&self, desc: &wgpu::util::BufferInitDescriptor) -> wgpu::Buffer {
+        self.device.create_buffer_init(desc)
     }
 
     /// Create a shader
@@ -186,13 +187,26 @@ impl GraphicsBackend {
     /// This could panic if another thread is calling GraphicsBackend methods, which internally lock the underlying surface texture.
     /// Please don't.
     pub fn get_surface_view(&self) -> Option<wgpu::TextureView> {
+        let format = self.get_surface_format();
         let texture = self.texture.lock().unwrap();
 
         texture.as_ref().map(|texture| {
-            texture
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default())
+            texture.texture
+                .create_view(&wgpu::TextureViewDescriptor {
+                    format: Some(format),
+                    ..Default::default()
+                })
         })
+    }
+
+    /// Get the surface format. Useful for initilization, even when no frames are available
+    /// 
+    /// # Panics
+    /// For the same reason [GraphicsBackend::get_surface_view] will
+    pub fn get_surface_format(&self) -> wgpu::TextureFormat {
+        let config = self.config.lock().unwrap();
+        
+        config.format
     }
 
     /// Resize this backend's surface

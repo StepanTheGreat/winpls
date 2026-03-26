@@ -6,13 +6,10 @@ use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    window::Window,
+    window::{Fullscreen, Window},
 };
 
-use crate::{
-    AppEvent,
-    backend::{EarlyGraphicsDevice, GraphicsBackend},
-};
+use crate::{AppEvent, Config, backend::GraphicsBackend};
 
 /// Global app context
 static APP_CTX: OnceLock<Mutex<AppCtx>> = OnceLock::new();
@@ -46,24 +43,21 @@ pub fn get_graphics_backend() -> Arc<GraphicsBackend> {
 }
 
 pub(crate) struct AppCtx {
+    config: Config,
+
     /// Our window 
     window: Mutex<Option<Arc<Window>>>,
 
     /// Our graphics context
     backend: Mutex<Option<Arc<GraphicsBackend>>>,
-
-    /// Our temporary early-initialized device
-    early_device: Mutex<Option<EarlyGraphicsDevice>>,
 }
 
 impl AppCtx {
-    fn new() -> Self {
-        let device = pollster::block_on(EarlyGraphicsDevice::new());
-
+    fn new(config: Config) -> Self {
         Self {
+            config,
             window: Mutex::new(None),
             backend: Mutex::new(None),
-            early_device: Mutex::new(Some(device)),
         }
     }
 
@@ -76,12 +70,12 @@ impl AppCtx {
 
         // Initialize our backend if it's not already
         if backend.is_none() && window.is_some() {
-            let mut early_device = self.early_device.lock().unwrap();
+            let new_backend = GraphicsBackend::new(window.as_ref().unwrap().clone());
+            
+            // Immediately try to flip
+            new_backend.flip();
 
-            *backend = Some(Arc::new(GraphicsBackend::new(
-                window.as_ref().unwrap().clone(),
-                early_device.take().unwrap(),
-            )));
+            *backend = Some(Arc::new(new_backend));
         }
     }
 
@@ -93,6 +87,10 @@ impl AppCtx {
     fn get_backend(&self) -> Option<Arc<GraphicsBackend>> {
         let backend = self.backend.lock().unwrap();
         backend.clone()
+    }
+
+    fn get_config(&self) -> &Config {
+        &self.config
     }
 
     fn request_redraw(&self) {
@@ -132,7 +130,15 @@ impl ApplicationHandler for WinitApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Initialize our context window
         with_app_ctx(|ctx| {
-            let window = Window::default_attributes();
+            let config = ctx.get_config();
+
+            let fullscreen = if config.fullscreen { Some(Fullscreen::Borderless(None)) } else { None };
+
+            let window = Window::default_attributes()
+                .with_title(config.title.clone())
+                .with_inner_size(winit::dpi::LogicalSize::new(config.width, config.height))
+                .with_fullscreen(fullscreen)
+                .with_resizable(config.resizable);
             ctx.set_window(Some(event_loop.create_window(window).unwrap()));
         });
 
@@ -210,11 +216,11 @@ pub trait AppHandler {
 
 /// Start an application
 #[allow(clippy::missing_panics_doc)]
-pub fn start<F>(f: F)
+pub fn start<F>(f: F, config: Config)
 where
     F: FnOnce() -> Box<dyn AppHandler> + 'static,
 {
-    init_app_ctx(AppCtx::new());
+    init_app_ctx(AppCtx::new(config));
 
     let mut app = WinitApp::new(Box::new(f));
 
